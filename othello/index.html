@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>⭕ Othello</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{
+  background:#0a0a1a;color:#fff;font-family:-apple-system,BlinkMacSystemFont,sans-serif;
+  min-height:100vh;display:flex;flex-direction:column;align-items:center;
+  padding:1rem;touch-action:none;
+}
+.home{text-align:center;margin-top:3rem}
+.home h1{font-size:2.5rem;margin-bottom:.5rem}
+.home input{
+  padding:.6rem 1rem;border-radius:8px;border:1px solid rgba(255,255,255,.2);
+  background:rgba(255,255,255,.05);color:#fff;font-size:1rem;text-align:center;
+  width:200px;margin:.5rem
+}
+.home input:focus{outline:none;border-color:#f39c12}
+.btn{
+  padding:.6rem 1.5rem;border-radius:8px;border:none;font-size:1rem;cursor:pointer;
+  font-weight:600;transition:transform .15s,opacity .15s;margin:.3rem;
+}
+.btn:hover{transform:scale(1.03)}
+.btn.primary{background:#f39c12;color:#0a0a1a}
+.btn.ghost{background:rgba(255,255,255,.1);color:#fff}
+.btn:disabled{opacity:.4;cursor:not-allowed;transform:none}
+.game{display:none;flex-direction:column;align-items:center;width:100%;max-width:400px}
+.game.active{display:flex}
+.info{display:flex;justify-content:space-between;width:100%;margin-bottom:.5rem}
+.info .player{padding:.3rem .8rem;border-radius:6px;font-size:.85rem;min-width:80px;text-align:center}
+.info .player.active{border:2px solid #f39c12}
+.info .player.black{background:rgba(0,0,0,.5)}
+.info .player.white{background:rgba(255,255,255,.1)}
+.info .score{font-size:1.2rem;font-weight:700}
+.board-wall{display:grid;grid-template-columns:20px repeat(8,1fr);grid-template-rows:repeat(8,1fr) 20px;gap:0;width:100%;
+  aspect-ratio:1;background:#1a5e2a;border-radius:4px;padding:4px;max-width:380px}
+.cell{background:#2d8a4e;border:1px solid rgba(0,0,0,.2);border-radius:2px;position:relative;cursor:pointer}
+.cell .piece{position:absolute;width:70%;height:70%;border-radius:50%;top:15%;left:15%;
+  transition:transform .2s,background-color .3s}
+.cell .piece.B{background:radial-gradient(circle at 35% 35%,#555,#000);box-shadow:2px 2px 4px rgba(0,0,0,.5)}
+.cell .piece.W{background:radial-gradient(circle at 35% 35%,#fff,#ccc);box-shadow:2px 2px 4px rgba(0,0,0,.3)}
+.cell .dot{position:absolute;width:20%;height:20%;border-radius:50%;background:rgba(255,255,255,.2);top:40%;left:40%}
+.lbl{display:flex;align-items:center;justify-content:center;font-size:.6rem;color:rgba(255,255,255,.5)}
+.status{margin:.5rem 0;font-size:.9rem;min-height:1.5rem}
+.overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.8);
+  display:flex;align-items:center;justify-content:center;flex-direction:column;z-index:100}
+.overlay.hidden{display:none}
+.overlay h2{font-size:2rem;margin-bottom:1rem}
+.back-link{color:#888;text-decoration:none;margin-top:.5rem;font-size:.85rem}
+.back-link:hover{color:#f39c12}
+</style>
+</head>
+<body>
+
+<div class="home" id="lobby">
+  <h1>⭕ Othello</h1>
+  <p style="color:#888;margin-bottom:1rem">Multiplayer · Reversi</p>
+  <input id="nameInput" placeholder="Your Name" maxlength="12">
+  <br>
+  <input id="roomInput" placeholder="Room Code" maxlength="4" style="display:none">
+  <br>
+  <button class="btn primary" onclick="createRoom()">Create Room</button>
+  <button class="btn ghost" onclick="showJoin()" id="joinBtn">Join Room</button>
+  <br><br>
+  <a class="back-link" href="../">← Back to Arcade</a>
+</div>
+
+<div class="game" id="game">
+  <div class="info">
+    <div class="player black" id="infoB"><div id="nameB">Black</div><div class="score" id="scoreB">2</div></div>
+    <div class="status" id="status">Waiting...</div>
+    <div class="player white" id="infoW"><div id="nameW">White</div><div class="score" id="scoreW">2</div></div>
+  </div>
+  <div class="board-wall" id="board"></div>
+  <button class="btn ghost" style="margin-top:.5rem" onclick="location.reload()">New Game</button>
+</div>
+
+<div class="overlay hidden" id="overlay">
+  <h2 id="overlayTitle"></h2>
+  <p id="overlayMsg"></p>
+  <button class="btn primary" id="overlayBtn" onclick="location.reload()">Play Again</button>
+</div>
+
+<script>
+let ws,myPlayer,myRoom,myName;
+
+// WebSocket URL: ws:// or wss:// based on page protocol, same host
+const protocol=location.protocol==='https:'?'wss':'ws';
+const wsUrl=`${protocol}://${location.host}`;
+
+function connect(url){
+  ws=new WebSocket(url);
+  ws.onopen=()=>{
+    if(myPlayer) joinGame();
+  };
+  ws.onmessage=e=>{
+    const d=JSON.parse(e.data);
+    if(d.type==='created'){
+      myRoom=d.room; myPlayer=d.player;
+      document.getElementById('roomInput').style.display='block';
+      document.getElementById('roomInput').value=d.room;
+      document.getElementById('status').textContent=`Room: ${d.room} — waiting for opponent...`;
+      document.getElementById('nameB').textContent=myName;
+    }else if(d.type==='joined'){
+      myPlayer=d.player;
+      document.getElementById('status').textContent='Game started!';
+      document.getElementById('nameW').textContent=myName;
+    }else if(d.type==='opponent'){
+      document.getElementById('lobby').style.display='none';
+      document.getElementById('game').classList.add('active');
+      document.getElementById('nameW').textContent=d.name;
+      document.getElementById('status').textContent=d.turn==='B'?'● Black\'s turn':'○ White\'s turn';
+      updateBoard(d.board,d.moves,d.score);
+    }else if(d.type==='state'){
+      document.getElementById('status').textContent=d.turn==='B'?'● Black\'s turn':'○ White\'s turn';
+      if(d.gameover){
+        let t=d.winner==='draw'?'🤝 Draw!':(d.winner==='B'?'🖤 '+d.black+' wins!':'🤍 '+d.white+' wins!');
+        showOverlay(t,`${d.black} ${d.score[0]} - ${d.score[1]} ${d.white}`);
+      }
+      updateBoard(d.board,d.moves,d.score);
+    }else if(d.type==='disconnected'){
+      document.getElementById('status').textContent='Opponent left';
+    }else if(d.type==='error'){
+      alert(d.msg);
+    }
+  };
+  ws.onclose=()=>{document.getElementById('status').textContent='Connection lost';};
+  ws.onerror=()=>{alert('Cannot connect to server. Make sure the server is running.');};
+}
+
+function updateBoard(board, moves, score){
+  document.getElementById('scoreB').textContent=score[0];
+  document.getElementById('scoreW').textContent=score[1];
+  document.getElementById('infoB').className='player black'+(myPlayer==='B'?' active':'');
+  document.getElementById('infoW').className='player white'+(myPlayer==='W'?' active':'');
+  for(let i=0;i<64;i++){
+    const cell=document.getElementById('c'+i);
+    const existing=cell.querySelector('.piece,.dot');
+    if(existing)existing.remove();
+    if(board[i]!=='.'){
+      const piece=document.createElement('div');
+      piece.className='piece '+board[i];
+      cell.appendChild(piece);
+    }else if(moves.includes(i)){
+      const dot=document.createElement('div');
+      dot.className='dot';
+      dot.onclick=()=>ws.send(JSON.stringify({cmd:'move',pos:i}));
+      cell.appendChild(dot);
+    }
+  }
+}
+
+function buildBoard(){
+  const board=document.getElementById('board');
+  for(let r=0;r<8;r++){
+    for(let c=0;c<8;c++){
+      if(c===0){
+        const lbl=document.createElement('div');lbl.className='lbl';
+        lbl.textContent=String.fromCharCode(65+r);board.appendChild(lbl);
+      }
+      const cell=document.createElement('div');cell.className='cell';cell.id='c'+(r*8+c);
+      board.appendChild(cell);
+      if(c===7){
+        const lbl=document.createElement('div');lbl.className='lbl';
+        lbl.textContent=String.fromCharCode(65+r);board.appendChild(lbl);
+      }
+    }
+  }
+  // Bottom labels
+  for(let c=0;c<8;c++){
+    const lbl=document.createElement('div');lbl.className='lbl';
+    lbl.textContent=c+1;board.appendChild(lbl);
+  }
+}
+
+function createRoom(){
+  myName=document.getElementById('nameInput').value||'Player';
+  connect(wsUrl);
+  setTimeout(()=>ws.send(JSON.stringify({cmd:'create',name:myName})),500);
+  document.getElementById('joinBtn').disabled=true;
+  document.getElementById('lobby').querySelector('.btn.primary').disabled=true;
+}
+
+function showJoin(){
+  document.getElementById('roomInput').style.display='inline';
+  const btn=document.getElementById('joinBtn');
+  btn.textContent='Join';
+  btn.onclick=joinGame;
+}
+
+function joinGame(){
+  myName=document.getElementById('nameInput').value||'Player';
+  const room=document.getElementById('roomInput').value.trim();
+  if(!room){alert('Enter room code');return;}
+  connect(wsUrl);
+  setTimeout(()=>ws.send(JSON.stringify({cmd:'join',room,name:myName})),500);
+}
+
+function showOverlay(title,msg){
+  document.getElementById('overlayTitle').textContent=title;
+  document.getElementById('overlayMsg').textContent=msg;
+  document.getElementById('overlay').classList.remove('hidden');
+}
+
+buildBoard();
+connect(wsUrl);
+</script>
+</body>
+</html>
