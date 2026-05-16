@@ -101,14 +101,17 @@ function connect(url){
     const d=JSON.parse(e.data);
     if(d.type==='created'){
       myRoom=d.room; myPlayer=d.player;
-      document.getElementById('roomInput').style.display='block';
-      document.getElementById('roomInput').value=d.room;
-      document.getElementById('status').textContent=`Room: ${d.room} — waiting for opponent...`;
+      document.getElementById('lobby').style.display='none';
+      document.getElementById('game').classList.add('active');
+      document.getElementById('status').textContent=`Room ${d.room} — share this code!'`;
       document.getElementById('nameB').textContent=myName;
+      document.getElementById('nameW').textContent='Waiting...';
     }else if(d.type==='joined'){
       myPlayer=d.player;
-      document.getElementById('status').textContent='Game started!';
+      document.getElementById('lobby').style.display='none';
+      document.getElementById('game').classList.add('active');
       document.getElementById('nameW').textContent=myName;
+      document.getElementById('status').textContent='Game started!';
     }else if(d.type==='opponent'){
       document.getElementById('lobby').style.display='none';
       document.getElementById('game').classList.add('active');
