@@ -69,6 +69,7 @@ body{
 </div>
 
 <div class="game" id="game">
+    <div id="serverInfo" style="font-size:.7rem;color:#666;margin-bottom:.3rem"></div>
   <div class="info">
     <div class="player black" id="infoB"><div id="nameB">Black</div><div class="score" id="scoreB">2</div></div>
     <div class="status" id="status">Waiting...</div>
@@ -88,96 +89,15 @@ body{
 let ws,myPlayer,myRoom,myName;
 
 // WebSocket URL: ws:// or wss:// based on page protocol, same host
-const protocol=location.protocol==='https:'?'wss':'ws';
-const wsUrl=`${protocol}://${location.host}`;
-
-function connect(url){
-  ws=new WebSocket(url);
-  ws.onopen=()=>{
-    if(myPlayer) joinGame();
-  };
-  ws.onmessage=e=>{
-    const d=JSON.parse(e.data);
-    if(d.type==='created'){
-      myRoom=d.room; myPlayer=d.player;
-      document.getElementById('roomInput').style.display='block';
-      document.getElementById('roomInput').value=d.room;
-      document.getElementById('status').textContent=`Room: ${d.room} — waiting for opponent...`;
-      document.getElementById('nameB').textContent=myName;
-    }else if(d.type==='joined'){
-      myPlayer=d.player;
-      document.getElementById('status').textContent='Game started!';
-      document.getElementById('nameW').textContent=myName;
-    }else if(d.type==='opponent'){
-      document.getElementById('lobby').style.display='none';
-      document.getElementById('game').classList.add('active');
-      document.getElementById('nameW').textContent=d.name;
-      document.getElementById('status').textContent=d.turn==='B'?'● Black\'s turn':'○ White\'s turn';
-      updateBoard(d.board,d.moves,d.score);
-    }else if(d.type==='state'){
-      document.getElementById('status').textContent=d.turn==='B'?'● Black\'s turn':'○ White\'s turn';
-      if(d.gameover){
-        let t=d.winner==='draw'?'🤝 Draw!':(d.winner==='B'?'🖤 '+d.black+' wins!':'🤍 '+d.white+' wins!');
-        showOverlay(t,`${d.black} ${d.score[0]} - ${d.score[1]} ${d.white}`);
-      }
-      updateBoard(d.board,d.moves,d.score);
-    }else if(d.type==='disconnected'){
-      document.getElementById('status').textContent='Opponent left';
-    }else if(d.type==='error'){
-      alert(d.msg);
-    }
-  };
-  ws.onclose=()=>{document.getElementById('status').textContent='Connection lost';};
-  ws.onerror=()=>{alert('Cannot connect to server. Make sure the server is running.');};
+const params=new URLSearchParams(location.search);
+const svr=params.get('server');
+let wsUrl;
+if(svr){
+  wsUrl='wss://'+svr;
+  document.title='⭕ Othello - '+svr;
+}else{
+  wsUrl=(location.protocol==='https:'?'wss':'ws')+'://'+location.host;
 }
-
-function updateBoard(board, moves, score){
-  document.getElementById('scoreB').textContent=score[0];
-  document.getElementById('scoreW').textContent=score[1];
-  document.getElementById('infoB').className='player black'+(myPlayer==='B'?' active':'');
-  document.getElementById('infoW').className='player white'+(myPlayer==='W'?' active':'');
-  for(let i=0;i<64;i++){
-    const cell=document.getElementById('c'+i);
-    const existing=cell.querySelector('.piece,.dot');
-    if(existing)existing.remove();
-    if(board[i]!=='.'){
-      const piece=document.createElement('div');
-      piece.className='piece '+board[i];
-      cell.appendChild(piece);
-    }else if(moves.includes(i)){
-      const dot=document.createElement('div');
-      dot.className='dot';
-      dot.onclick=()=>ws.send(JSON.stringify({cmd:'move',pos:i}));
-      cell.appendChild(dot);
-    }
-  }
-}
-
-function buildBoard(){
-  const board=document.getElementById('board');
-  for(let r=0;r<8;r++){
-    for(let c=0;c<8;c++){
-      if(c===0){
-        const lbl=document.createElement('div');lbl.className='lbl';
-        lbl.textContent=String.fromCharCode(65+r);board.appendChild(lbl);
-      }
-      const cell=document.createElement('div');cell.className='cell';cell.id='c'+(r*8+c);
-      board.appendChild(cell);
-      if(c===7){
-        const lbl=document.createElement('div');lbl.className='lbl';
-        lbl.textContent=String.fromCharCode(65+r);board.appendChild(lbl);
-      }
-    }
-  }
-  // Bottom labels
-  for(let c=0;c<8;c++){
-    const lbl=document.createElement('div');lbl.className='lbl';
-    lbl.textContent=c+1;board.appendChild(lbl);
-  }
-}
-
-function createRoom(){
-  myName=document.getElementById('nameInput').value||'Player';
   connect(wsUrl);
   setTimeout(()=>ws.send(JSON.stringify({cmd:'create',name:myName})),500);
   document.getElementById('joinBtn').disabled=true;
