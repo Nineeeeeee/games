@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Mini Arcade</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{
+  background:linear-gradient(135deg,#0a0a1a,#1a1a3a);
+  min-height:100vh;
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  color:#fff;
+  display:flex;flex-direction:column;align-items:center;
+  padding:2rem 1rem;
+}
+h1{
+  font-size:2.5rem;margin-bottom:.5rem;
+  background:linear-gradient(90deg,#f39c12,#e74c3c,#9b59b6,#3498db);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+  background-clip:text;
+}
+.subtitle{color:#888;margin-bottom:2rem}
+.games{
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(200px,1fr));
+  gap:1.5rem;width:100%;max-width:900px;
+}
+.card{
+  background:rgba(255,255,255,.05);
+  border:1px solid rgba(255,255,255,.1);
+  border-radius:12px;padding:1.5rem;
+  text-align:center;cursor:pointer;
+  transition:transform .2s,box-shadow .2s,background .2s;
+  text-decoration:none;color:inherit;
+}
+.card:hover{transform:translateY(-4px);box-shadow:0 8px 30px rgba(0,0,0,.4);background:rgba(255,255,255,.1)}
+.card .emoji{font-size:3rem;margin-bottom:.8rem}
+.card .title{font-size:1.2rem;font-weight:600;margin-bottom:.3rem}
+.card .desc{font-size:.85rem;color:#888}
+.card .badge{
+  display:inline-block;margin-top:.6rem;
+  padding:.15rem .6rem;border-radius:20px;
+  font-size:.7rem;background:rgba(255,255,255,.1);color:#aaa;
+}
+.footer{margin-top:3rem;color:#555;font-size:.8rem}
+</style>
+</head>
+<body>
+<h1>🎮 Mini Arcade</h1>
+<p class="subtitle">HTML mini games · tap to play</p>
+
+<div class="games">
+  <a class="card" href="snake/">
+    <div class="emoji">🐍</div>
+    <div class="title">Snake</div>
+    <div class="desc">Classic snake game</div>
+    <span class="badge">keyboard</span>
+  </a>
+
+  <div class="card" style="opacity:.4;cursor:default">
+    <div class="emoji">🧱</div>
+    <div class="title">Tetris</div>
+    <div class="desc">Coming soon</div>
+    <span class="badge">wip</span>
+  </div>
+
+  <div class="card" style="opacity:.4;cursor:default">
+    <div class="emoji">🏓</div>
+    <div class="title">Breakout</div>
+    <div class="desc">Coming soon</div>
+    <span class="badge">wip</span>
+  </div>
+
+  <div class="card" style="opacity:.4;cursor:default">
+    <div class="emoji">💣</div>
+    <div class="title">Minesweeper</div>
+    <div class="desc">Coming soon</div>
+    <span class="badge">wip</span>
+  </div>
+</div>
+
+<p class="footer">Built with ❤️ · <a style="color:#888" href="https://github.com/Nineeeeeee/games">GitHub</a></p>
+</body>
+</html>

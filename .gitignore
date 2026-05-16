@@ -1,0 +1,14 @@
+# 绝对不推送
+.env
+*.key
+*.pem
+*secret*
+*api_key*
+*token*
+credentials*
+.ssh/
+../data/
+../MEMORY.md
+../USER.md
+../TOOLS.md
+../SOUL.md
