@@ -35,7 +35,7 @@ body{
 .info .player.black{background:rgba(0,0,0,.5)}
 .info .player.white{background:rgba(255,255,255,.1)}
 .info .score{font-size:1.2rem;font-weight:700}
-.board-wall{display:grid;grid-template-columns:20px repeat(8,1fr);grid-template-rows:repeat(8,1fr) 20px;gap:0;width:100%;
+.board-wall{display:grid;grid-template-columns:20px repeat(8,1fr) 20px;grid-template-rows:20px repeat(8,1fr);gap:0;width:100%;
   aspect-ratio:1;background:#1a5e2a;border-radius:4px;padding:4px;max-width:380px}
 .cell{background:#2d8a4e;border:1px solid rgba(0,0,0,.2);border-radius:2px;position:relative;cursor:pointer}
 .cell .piece{position:absolute;width:70%;height:70%;border-radius:50%;top:15%;left:15%;
@@ -166,25 +166,24 @@ function updateBoard(board, moves, score){
 }
 
 function buildBoard(){
-  const board=document.getElementById('board');
-  for(let r=0;r<8;r++){
-    for(let c=0;c<8;c++){
-      if(c===0){
-        const lbl=document.createElement('div');lbl.className='lbl';
-        lbl.textContent=String.fromCharCode(65+r);board.appendChild(lbl);
-      }
-      const cell=document.createElement('div');cell.className='cell';cell.id='c'+(r*8+c);
-      board.appendChild(cell);
-      if(c===7){
-        const lbl=document.createElement('div');lbl.className='lbl';
-        lbl.textContent=String.fromCharCode(65+r);board.appendChild(lbl);
-      }
-    }
-  }
-  // Bottom labels
+  const b=document.getElementById('board');
+  // Top: empty + col labels 1-8 + empty
+  const te=document.createElement('div');te.className='lbl';b.appendChild(te);
   for(let c=0;c<8;c++){
-    const lbl=document.createElement('div');lbl.className='lbl';
-    lbl.textContent=c+1;board.appendChild(lbl);
+    const l=document.createElement('div');l.className='lbl';
+    l.textContent=c+1;b.appendChild(l);
+  }
+  const te2=document.createElement('div');te2.className='lbl';b.appendChild(te2);
+  // Board rows: letter + 8 cells + letter
+  for(let r=0;r<8;r++){
+    const left=document.createElement('div');left.className='lbl';
+    left.textContent=String.fromCharCode(65+r);b.appendChild(left);
+    for(let c=0;c<8;c++){
+      const cell=document.createElement('div');cell.className='cell';cell.id='c'+(r*8+c);
+      b.appendChild(cell);
+    }
+    const right=document.createElement('div');right.className='lbl';
+    right.textContent=String.fromCharCode(65+r);b.appendChild(right);
   }
 }
 
