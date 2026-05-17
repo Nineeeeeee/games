@@ -122,6 +122,23 @@ async def handler(ws):
                 await r['host'].send(json.dumps(state))
                 await r['guest'].send(json.dumps(state))
 
+            elif cmd == 'restart':
+                if not room: continue
+                r = ROOMS[room]
+                if not r['started']:
+                    await ws.send(json.dumps({'type':'error','msg':'Game not started'}))
+                    continue
+                # Reset board
+                r['board'] = new_board()
+                r['turn'] = 'B'
+                r['moves'] = valid_moves(r['board'], 'B')
+                s = score(r['board'])
+                state = {'type':'game_start','board':''.join(r['board']),
+                    'turn':r['turn'],'moves':r['moves'],'score':s,
+                    'black':r['host_name'],'white':r['guest_name']}
+                await r['host'].send(json.dumps(state))
+                await r['guest'].send(json.dumps(state))
+
             elif cmd == 'move':
                 if not room: continue
                 r = ROOMS[room]

@@ -107,7 +107,8 @@ body{
 <div class="overlay hidden" id="overlay">
   <h2 id="overlayTitle"></h2>
   <p id="overlayMsg"></p>
-  <button class="btn primary" id="overlayBtn" onclick="location.reload()">Play Again</button>
+  <button class="btn primary" id="overlayBtn" onclick="playAgain()">Play Again</button>
+  <button class="btn ghost" onclick="location.reload()" style="margin-top:.5rem">Back to Lobby</button>
 </div>
 
 <script>
@@ -159,6 +160,7 @@ function connect(url){
         document.getElementById('waitMsg').textContent='Opponent ready! Start the game.';
       }
     }else if(d.type==='game_start'){
+      document.getElementById('overlay').classList.add('hidden');
       showPanel('game');
       document.getElementById('nameB').textContent=d.black;
       document.getElementById('nameW').textContent=d.white;
@@ -278,6 +280,11 @@ function startGame(){
 function leaveRoom(){
   ws.close();
   showPanel('lobby');
+}
+
+function playAgain(){
+  sendCmd({cmd:'restart'});
+  document.getElementById('overlay').classList.add('hidden');
 }
 
 function showOverlay(title,msg){
