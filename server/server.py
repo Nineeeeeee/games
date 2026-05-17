@@ -124,10 +124,10 @@ async def handler(ws):
 
             elif cmd == 'restart':
                 if not room: continue
-                r = ROOMS[room]
-                if not r['started']:
-                    await ws.send(json.dumps({'type':'error','msg':'Game not started'}))
+                if room not in ROOMS:
+                    await ws.send(json.dumps({'type':'error','msg':'Room gone'}))
                     continue
+                r = ROOMS[room]
                 # Reset board
                 r['board'] = new_board()
                 r['turn'] = 'B'
@@ -171,7 +171,7 @@ async def handler(ws):
                             'black':r['host_name'],'white':r['guest_name']})
                         await r['host'].send(state)
                         await r['guest'].send(state)
-                        del ROOMS[room]
+                        r['started'] = False  # Keep room alive for restart
                         break
                 state = {'type':'state','board':''.join(r['board']),
                     'turn':r['turn'],'moves':r['moves'],'score':s}
