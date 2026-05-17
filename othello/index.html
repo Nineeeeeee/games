@@ -27,6 +27,8 @@ body{
 .btn.primary{background:#f39c12;color:#0a0a1a}
 .btn.ghost{background:rgba(255,255,255,.1);color:#fff}
 .btn:disabled{opacity:.4;cursor:not-allowed;transform:none}
+.panel{display:none;flex-direction:column;align-items:center;width:100%;max-width:400px}
+.panel.active{display:flex}
 .game{display:none;flex-direction:column;align-items:center;width:100%;max-width:400px}
 .game.active{display:flex}
 .info{display:flex;justify-content:space-between;width:100%;margin-bottom:.5rem}
@@ -38,8 +40,7 @@ body{
 .board-wall{display:grid;grid-template-columns:20px repeat(8,1fr) 20px;grid-template-rows:20px repeat(8,1fr);gap:0;width:100%;
   aspect-ratio:1;background:#1a5e2a;border-radius:4px;padding:4px;max-width:380px}
 .cell{background:#2d8a4e;border:1px solid rgba(0,0,0,.2);border-radius:2px;position:relative;cursor:pointer}
-.cell .piece{position:absolute;width:70%;height:70%;border-radius:50%;top:15%;left:15%;
-  transition:transform .2s,background-color .3s}
+.cell .piece{position:absolute;width:70%;height:70%;border-radius:50%;top:15%;left:15%}
 .cell .piece.B{background:radial-gradient(circle at 35% 35%,#555,#000);box-shadow:2px 2px 4px rgba(0,0,0,.5)}
 .cell .piece.W{background:radial-gradient(circle at 35% 35%,#fff,#ccc);box-shadow:2px 2px 4px rgba(0,0,0,.3)}
 .cell .dot{position:absolute;width:20%;height:20%;border-radius:50%;background:rgba(255,255,255,.2);top:40%;left:40%}
@@ -51,10 +52,22 @@ body{
 .overlay h2{font-size:2rem;margin-bottom:1rem}
 .back-link{color:#888;text-decoration:none;margin-top:.5rem;font-size:.85rem}
 .back-link:hover{color:#f39c12}
+/* Room panel */
+.room-card{background:rgba(255,255,255,.05);border-radius:12px;padding:2rem;width:100%;max-width:320px;text-align:center;margin-top:2rem}
+.room-code{font-size:3rem;font-weight:700;color:#f39c12;letter-spacing:.3rem;margin:.5rem 0}
+.player-list{margin:1.5rem 0}
+.player-row{display:flex;align-items:center;justify-content:space-between;padding:.8rem 1rem;margin:.5rem 0;border-radius:8px}
+.player-row.host{background:rgba(243,156,18,.15);border:1px solid rgba(243,156,18,.3)}
+.player-row.guest{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1)}
+.player-row .name{font-size:1rem}
+.player-row .tag{font-size:.75rem;padding:.15rem .5rem;border-radius:4px}
+.player-row .tag.host-tag{background:#f39c12;color:#0a0a1a}
+.player-row .tag.waiting-tag{background:rgba(255,255,255,.1);color:#888}
 </style>
 </head>
 <body>
 
+<!-- Lobby -->
 <div class="home" id="lobby">
   <h1>⭕ Othello</h1>
   <p style="color:#888;margin-bottom:1rem">Multiplayer · Reversi</p>
@@ -68,6 +81,19 @@ body{
   <a class="back-link" href="../">← Back to Arcade</a>
 </div>
 
+<!-- Room waiting panel -->
+<div class="panel" id="roomPanel">
+  <p style="color:#888;margin-top:1rem">Share this code with your friend</p>
+  <div class="room-code" id="roomCode">----</div>
+  <div class="room-card">
+    <div class="player-list" id="playerList"></div>
+    <button class="btn primary" id="startBtn" onclick="startGame()" style="display:none;width:100%;margin-top:.5rem">Start Game</button>
+    <p id="waitMsg" style="color:#888;font-size:.9rem;margin-top:1rem">Waiting for opponent...</p>
+  </div>
+  <a class="back-link" href="#" onclick="leaveRoom()" style="margin-top:1rem">← Leave room</a>
+</div>
+
+<!-- Game board -->
 <div class="game" id="game">
   <div class="info">
     <div class="player black" id="infoB"><div id="nameB">Black</div><div class="score" id="scoreB">2</div></div>
@@ -75,7 +101,7 @@ body{
     <div class="player white" id="infoW"><div id="nameW">White</div><div class="score" id="scoreW">2</div></div>
   </div>
   <div class="board-wall" id="board"></div>
-  <button class="btn ghost" style="margin-top:.5rem" onclick="location.reload()">New Game</button>
+  <button class="btn ghost" style="margin-top:.5rem" onclick="location.reload()">Leave</button>
 </div>
 
 <div class="overlay hidden" id="overlay">
@@ -85,69 +111,102 @@ body{
 </div>
 
 <script>
-let ws,myPlayer,myRoom,myName;
+let ws,myRole,myRoom,myName;
 
-// WebSocket URL: ws:// or wss:// based on page protocol, same host
 const params=new URLSearchParams(location.search);
 const svr=params.get('server');
 const wsUrl=svr?`wss://${svr}`:(location.protocol==='https:'?'wss':'ws')+'://'+location.host;
 
-function toast(msg){const d=document.createElement('div');d.style.cssText='position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#e74c3c;color:#fff;padding:10px 20px;border-radius:8px;font-size:14px;z-index:999;max-width:90%;text-align:center;animation:fadeIn .3s';d.textContent=msg;document.body.appendChild(d);setTimeout(()=>{d.style.opacity='0';d.style.transition='opacity .5s';setTimeout(()=>d.remove(),500)},6000);}
+function toast(msg,c){
+  const d=document.createElement('div');
+  d.style.cssText='position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:'+(c||'#e74c3c')+';color:#fff;padding:10px 20px;border-radius:8px;font-size:14px;z-index:999;max-width:90%;text-align:center';
+  d.textContent=msg;document.body.appendChild(d);
+  setTimeout(()=>{d.style.opacity='0';d.style.transition='opacity .5s';setTimeout(()=>d.remove(),500)},5000);
+}
+
+function showPanel(id){
+  document.querySelectorAll('.home,.panel,.game').forEach(el=>el.classList.remove('active'));
+  document.querySelectorAll('.home,.panel,.game').forEach(el=>el.style.display='none');
+  const el=document.getElementById(id);
+  el.style.display='flex';el.classList.add('active');
+}
 
 function connect(url){
-  toast('Connecting to '+url+'...');
   ws=new WebSocket(url);
-  ws.onopen=()=>{
-    toast('Connected! Now join or create a room.');
-    if(myPlayer) joinGame();
-  };
+  ws.onopen=()=>{toast('Connected!','#27ae60');};
   ws.onmessage=e=>{
     const d=JSON.parse(e.data);
     if(d.type==='created'){
-      myRoom=d.room; myPlayer=d.player;
-      document.getElementById('lobby').style.display='none';
-      document.getElementById('game').classList.add('active');
-      document.getElementById('status').textContent='Room '+d.room+' — share this code!';
-      document.getElementById('nameB').textContent=myName;
-      document.getElementById('nameW').textContent='Waiting...';
-      toast('Room created: '+d.room);
+      myRoom=d.room;myRole=d.player;
+      document.getElementById('roomCode').textContent=d.room;
+      showPanel('roomPanel');
+      updatePlayerList([{name:myName,role:'host'},{name:'?',role:'guest'}]);
+      if(myRole==='host'){
+        document.getElementById('startBtn').style.display='block';
+        document.getElementById('waitMsg').textContent='Waiting for opponent...';
+      }
     }else if(d.type==='joined'){
-      myPlayer=d.player;
-      document.getElementById('lobby').style.display='none';
-      document.getElementById('game').classList.add('active');
-      document.getElementById('nameW').textContent=myName;
-      document.getElementById('status').textContent='Game started!';
-      toast('Joined room!');
-    }else if(d.type==='opponent'){
-      document.getElementById('lobby').style.display='none';
-      document.getElementById('game').classList.add('active');
-      document.getElementById('nameW').textContent=d.name;
-      document.getElementById('status').textContent=d.turn==='B'?'\u25cf Black\'s turn':'\u25cb White\'s turn';
+      myRoom=d.room;myRole=d.player;
+      document.getElementById('roomCode').textContent=d.room;
+      showPanel('roomPanel');
+      updatePlayerList([{name:'?',role:'host'},{name:myName,role:'guest'}]);
+      document.getElementById('startBtn').style.display='none';
+      document.getElementById('waitMsg').textContent='Waiting for host to start...';
+    }else if(d.type==='room_update'){
+      updatePlayerList(d.players);
+      if(myRole==='host' && d.players[1] && d.players[1].name!=='?'){
+        document.getElementById('startBtn').disabled=false;
+        document.getElementById('waitMsg').textContent='Opponent ready! Start the game.';
+      }
+    }else if(d.type==='game_start'){
+      showPanel('game');
+      document.getElementById('nameB').textContent=d.black;
+      document.getElementById('nameW').textContent=d.white;
+      document.getElementById('status').textContent='\u25cf '+d.black+'\'s turn';
       updateBoard(d.board,d.moves,d.score);
-      toast('Opponent joined!');
     }else if(d.type==='state'){
-      document.getElementById('status').textContent=d.turn==='B'?'\u25cf Black\'s turn':'\u25cb White\'s turn';
+      const turnName=d.turn==='B'?d.black:d.white;
+      document.getElementById('status').textContent=(d.turn==='B'?'\u25cf ':'\u25cb ')+turnName+'\'s turn';
       if(d.gameover){
         let t=d.winner==='draw'?'\ud83e\udd1d Draw!':(d.winner==='B'?'\ud83d\udda4 '+d.black+' wins!':'\ud83e\udd0d '+d.white+' wins!');
         showOverlay(t,d.black+' '+d.score[0]+' - '+d.score[1]+' '+d.white);
       }
       updateBoard(d.board,d.moves,d.score);
     }else if(d.type==='disconnected'){
-      document.getElementById('status').textContent='Opponent left';
-      toast('Opponent disconnected');
+      toast(d.msg||'Opponent disconnected');
+      setTimeout(()=>{showPanel('lobby');},2000);
     }else if(d.type==='error'){
       toast('Error: '+d.msg);
     }
   };
-  ws.onclose=(e)=>{document.getElementById('status').textContent='Connection lost'; toast('Connection closed (code '+e.code+')');};
-  ws.onerror=(e)=>{toast('WebSocket error — cannot reach server. Check tunnel/server.');};
+  ws.onclose=()=>{toast('Disconnected','#e74c3c');};
+  ws.onerror=()=>{toast('Cannot connect to server','#e74c3c');};
+}
+
+function updatePlayerList(players){
+  const list=document.getElementById('playerList');
+  list.innerHTML='';
+  const colors={host:'#f39c12',guest:'#fff'};
+  players.forEach((p,i)=>{
+    const row=document.createElement('div');
+    row.className='player-row '+(i===0?'host':'guest');
+    const nameSpan=document.createElement('span');
+    nameSpan.className='name';
+    nameSpan.textContent=p.name||'?'+(p.name==='?'?' (empty)':'');
+    row.appendChild(nameSpan);
+    const tag=document.createElement('span');
+    tag.className='tag '+(p.role==='host'?'host-tag':'waiting-tag');
+    tag.textContent=p.role==='host'?'Host':'Player 2';
+    row.appendChild(tag);
+    list.appendChild(row);
+  });
 }
 
 function updateBoard(board, moves, score){
   document.getElementById('scoreB').textContent=score[0];
   document.getElementById('scoreW').textContent=score[1];
-  document.getElementById('infoB').className='player black'+(myPlayer==='B'?' active':'');
-  document.getElementById('infoW').className='player white'+(myPlayer==='W'?' active':'');
+  document.getElementById('infoB').className='player black'+(myRole==='host'?' active':'');
+  document.getElementById('infoW').className='player white'+(myRole==='guest'?' active':'');
   for(let i=0;i<64;i++){
     const cell=document.getElementById('c'+i);
     const existing=cell.querySelector('.piece,.dot');
@@ -167,14 +226,12 @@ function updateBoard(board, moves, score){
 
 function buildBoard(){
   const b=document.getElementById('board');
-  // Top: empty + col labels 1-8 + empty
   const te=document.createElement('div');te.className='lbl';b.appendChild(te);
   for(let c=0;c<8;c++){
     const l=document.createElement('div');l.className='lbl';
     l.textContent=c+1;b.appendChild(l);
   }
   const te2=document.createElement('div');te2.className='lbl';b.appendChild(te2);
-  // Board rows: letter + 8 cells + letter
   for(let r=0;r<8;r++){
     const left=document.createElement('div');left.className='lbl';
     left.textContent=String.fromCharCode(65+r);b.appendChild(left);
@@ -198,16 +255,13 @@ function sendCmd(cmd,retries=10){
 
 function createRoom(){
   myName=document.getElementById('nameInput').value||'Player';
-  document.getElementById('joinBtn').disabled=true;
-  document.getElementById('lobby').querySelector('.btn.primary').disabled=true;
   sendCmd({cmd:'create',name:myName});
 }
 
 function showJoin(){
   document.getElementById('roomInput').style.display='inline';
-  const btn=document.getElementById('joinBtn');
-  btn.textContent='Join';
-  btn.onclick=joinGame;
+  document.getElementById('joinBtn').textContent='Join';
+  document.getElementById('joinBtn').onclick=joinGame;
 }
 
 function joinGame(){
@@ -215,6 +269,15 @@ function joinGame(){
   const room=document.getElementById('roomInput').value.trim();
   if(!room){toast('Enter room code');return;}
   sendCmd({cmd:'join',room,name:myName});
+}
+
+function startGame(){
+  sendCmd({cmd:'start'});
+}
+
+function leaveRoom(){
+  ws.close();
+  showPanel('lobby');
 }
 
 function showOverlay(title,msg){
