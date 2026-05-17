@@ -92,9 +92,13 @@ const params=new URLSearchParams(location.search);
 const svr=params.get('server');
 const wsUrl=svr?`wss://${svr}`:(location.protocol==='https:'?'wss':'ws')+'://'+location.host;
 
+function toast(msg){const d=document.createElement('div');d.style.cssText='position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#e74c3c;color:#fff;padding:10px 20px;border-radius:8px;font-size:14px;z-index:999;max-width:90%;text-align:center;animation:fadeIn .3s';d.textContent=msg;document.body.appendChild(d);setTimeout(()=>{d.style.opacity='0';d.style.transition='opacity .5s';setTimeout(()=>d.remove(),500)},6000);}
+
 function connect(url){
+  toast('Connecting to '+url+'...');
   ws=new WebSocket(url);
   ws.onopen=()=>{
+    toast('Connected!');
     if(myPlayer) joinGame();
   };
   ws.onmessage=e=>{
@@ -103,36 +107,40 @@ function connect(url){
       myRoom=d.room; myPlayer=d.player;
       document.getElementById('lobby').style.display='none';
       document.getElementById('game').classList.add('active');
-      document.getElementById('status').textContent=`Room ${d.room} — share this code!'`;
+      document.getElementById('status').textContent='Room '+d.room+' — share this code!';
       document.getElementById('nameB').textContent=myName;
       document.getElementById('nameW').textContent='Waiting...';
+      toast('Room created: '+d.room);
     }else if(d.type==='joined'){
       myPlayer=d.player;
       document.getElementById('lobby').style.display='none';
       document.getElementById('game').classList.add('active');
       document.getElementById('nameW').textContent=myName;
       document.getElementById('status').textContent='Game started!';
+      toast('Joined room!');
     }else if(d.type==='opponent'){
       document.getElementById('lobby').style.display='none';
       document.getElementById('game').classList.add('active');
       document.getElementById('nameW').textContent=d.name;
-      document.getElementById('status').textContent=d.turn==='B'?'● Black\'s turn':'○ White\'s turn';
+      document.getElementById('status').textContent=d.turn==='B'?'\u25cf Black\'s turn':'\u25cb White\'s turn';
       updateBoard(d.board,d.moves,d.score);
+      toast('Opponent joined!');
     }else if(d.type==='state'){
-      document.getElementById('status').textContent=d.turn==='B'?'● Black\'s turn':'○ White\'s turn';
+      document.getElementById('status').textContent=d.turn==='B'?'\u25cf Black\'s turn':'\u25cb White\'s turn';
       if(d.gameover){
-        let t=d.winner==='draw'?'🤝 Draw!':(d.winner==='B'?'🖤 '+d.black+' wins!':'🤍 '+d.white+' wins!');
-        showOverlay(t,`${d.black} ${d.score[0]} - ${d.score[1]} ${d.white}`);
+        let t=d.winner==='draw'?'\ud83e\udd1d Draw!':(d.winner==='B'?'\ud83d\udda4 '+d.black+' wins!':'\ud83e\udd0d '+d.white+' wins!');
+        showOverlay(t,d.black+' '+d.score[0]+' - '+d.score[1]+' '+d.white);
       }
       updateBoard(d.board,d.moves,d.score);
     }else if(d.type==='disconnected'){
       document.getElementById('status').textContent='Opponent left';
+      toast('Opponent disconnected');
     }else if(d.type==='error'){
-      alert(d.msg);
+      toast('Error: '+d.msg);
     }
   };
-  ws.onclose=()=>{document.getElementById('status').textContent='Connection lost';};
-  ws.onerror=()=>{alert('Cannot connect to server. Make sure the server is running.');};
+  ws.onclose=(e)=>{document.getElementById('status').textContent='Connection lost'; toast('Connection closed (code '+e.code+')');};
+  ws.onerror=(e)=>{toast('WebSocket error — cannot reach server. Check tunnel/server.');};
 }
 
 function updateBoard(board, moves, score){
