@@ -12,21 +12,13 @@ body{
   min-height:100vh;font-family:-apple-system,BlinkMacSystemFont,sans-serif;
   flex-direction:column;padding:1rem;
   touch-action:none;user-select:none;-webkit-user-select:none;
+  overflow:hidden;position:fixed;width:100%
 }
-.header{display:flex;align-items:center;gap:1.5rem;margin-bottom:1rem}
-.header a{color:#f39c12;text-decoration:none;font-size:.9rem;padding:.3rem .8rem;border:1px solid #f39c12;border-radius:6px;transition:background .2s}
-.header a:hover{background:rgba(243,156,18,.15)}
+.header{display:flex;align-items:center;gap:1.5rem;margin-bottom:1rem;width:100%;justify-content:center}
+.header a{color:#f39c12;text-decoration:none;font-size:.9rem;padding:.3rem .8rem;border:1px solid #f39c12;border-radius:6px;transition:background .2s;position:absolute;left:1rem}
 .score{font-size:1.5rem;color:#f39c12;min-width:80px;text-align:right}
 .best{font-size:.85rem;color:#666}
 canvas{border:2px solid rgba(255,255,255,.1);border-radius:8px;display:block;max-width:100%;height:auto}
-.controls{display:flex;gap:1rem;margin-top:1rem}
-.ctrl-btn{
-  width:55px;height:55px;border-radius:12px;border:1px solid rgba(255,255,255,.2);
-  background:rgba(255,255,255,.05);color:#fff;font-size:1.4rem;cursor:pointer;
-  display:flex;align-items:center;justify-content:center;
-  transition:background .15s
-}
-.ctrl-btn:active{background:rgba(255,255,255,.2)}
 @media(max-width:450px){body{padding:.5rem}.header{gap:1rem;margin-bottom:.5rem}.score{font-size:1.2rem;min-width:auto}}
 .d-pad{
   display:grid;grid-template-columns:50px 50px 50px;grid-template-rows:50px 50px 50px;
@@ -41,20 +33,23 @@ canvas{border:2px solid rgba(255,255,255,.1);border-radius:8px;display:block;max
 .d-pad .left{grid-column:1;grid-row:2}
 .d-pad .right{grid-column:3;grid-row:2}
 .d-pad .down{grid-column:2;grid-row:3}
-.game-over{
+.overlay{
   position:fixed;top:0;left:0;width:100%;height:100%;
-  background:rgba(0,0,0,.8);display:flex;flex-direction:column;
-  align-items:center;justify-content:center;z-index:10
+  background:rgba(0,0,0,.85);display:flex;flex-direction:column;
+  align-items:center;justify-content:center;z-index:10;
+  transition:opacity .3s
 }
-.game-over.hidden{display:none}
-.game-over h2{font-size:2rem;margin-bottom:1rem;color:#e74c3c}
-.game-over p{color:#aaa;margin-bottom:1.5rem}
-.game-over button{
-  padding:.8rem 2rem;border-radius:8px;border:none;
-  background:#f39c12;color:#0a0a1a;font-size:1rem;font-weight:600;
+.overlay.hidden{opacity:0;pointer-events:none}
+.overlay h1{font-size:3rem;margin-bottom:.5rem;letter-spacing:.2rem}
+.overlay .sub{color:#888;margin-bottom:1.5rem;font-size:.9rem}
+.overlay .bst{color:#f39c12;font-size:1rem;margin-bottom:2rem}
+.overlay button{
+  padding:.8rem 2.5rem;border-radius:8px;border:none;
+  background:#f39c12;color:#0a0a1a;font-size:1.1rem;font-weight:600;
   cursor:pointer;transition:transform .15s
 }
-.game-over button:hover{transform:scale(1.05)}
+.overlay button:hover{transform:scale(1.05)}
+.overlay .hint{color:#555;margin-top:1.5rem;font-size:.8rem}
 </style>
 </head>
 <body>
@@ -67,16 +62,27 @@ canvas{border:2px solid rgba(255,255,255,.1);border-radius:8px;display:block;max
 <canvas id="game"></canvas>
 
 <!-- Mobile D-pad -->
-<div class="d-pad">
+<div class="d-pad" id="dpad">
   <button class="up" ontouchstart="changeDir(0,-1);event.preventDefault()">▲</button>
   <button class="left" ontouchstart="changeDir(-1,0);event.preventDefault()">◄</button>
   <button class="right" ontouchstart="changeDir(1,0);event.preventDefault()">►</button>
   <button class="down" ontouchstart="changeDir(0,1);event.preventDefault()">▼</button>
 </div>
 
-<div class="game-over hidden" id="gameover">
-  <h2>Game Over</h2>
-  <p>Score: <span id="final">0</span></p>
+<!-- Start Screen -->
+<div class="overlay" id="startScreen">
+  <h1>🐍</h1>
+  <div class="sub">SNAKE</div>
+  <div class="bst">Best: <span id="startBest">0</span></div>
+  <button id="startBtn">Tap to Start</button>
+  <div class="hint">← → ↑ ↓ · WASD · Swipe</div>
+</div>
+
+<!-- Game Over -->
+<div class="overlay hidden" id="gameover">
+  <h2 style="font-size:2rem;margin-bottom:.5rem;color:#e74c3c">💀 Game Over</h2>
+  <p style="color:#aaa;margin-bottom:.5rem">Score: <span id="final" style="font-size:1.5rem;color:#f39c12">0</span></p>
+  <p style="color:#888;margin-bottom:2rem">Best: <span id="finalBest">0</span></p>
   <button onclick="startGame()">Play Again</button>
 </div>
 
@@ -87,11 +93,11 @@ const SIZE=20,ROWS=25,COLS=25;
 canvas.width=COLS*SIZE;canvas.height=ROWS*SIZE;
 
 let snake=[],food={},dir={x:1,y:0},nextDir={x:1,y:0};
-let score=0,best=0,tick,gameLoop;
+let score=0,best=0,tick,gameLoop,playing=false;
 
-const bestEl=document.getElementById('best');
 best=parseInt(localStorage.getItem('snake_best')||'0');
-bestEl.textContent=best;
+document.getElementById('best').textContent=best;
+document.getElementById('startBest').textContent=best;
 
 function randFood(){
   let p;do{p={x:Math.floor(Math.random()*COLS),y:Math.floor(Math.random()*ROWS)}}
@@ -100,36 +106,63 @@ function randFood(){
 }
 
 function startGame(){
+  document.getElementById('startScreen').classList.add('hidden');
   document.getElementById('gameover').classList.add('hidden');
   snake=[{x:12,y:12},{x:11,y:12},{x:10,y:12}];
   dir={x:1,y:0};nextDir={x:1,y:0};
   score=0;tick=120;
   food=randFood();
+  playing=true;
   document.getElementById('score').textContent='0';
   clearInterval(gameLoop);
+  draw();
   gameLoop=setInterval(update,1000*tick/1000);
 }
 
 function changeDir(dx,dy){
+  if(!playing)return;
   if(dx!==0&&dir.x!==0)return;
   if(dy!==0&&dir.y!==0)return;
   nextDir={x:dx,y:dy};
 }
 
+// Keyboard
 document.addEventListener('keydown',e=>{
   const map={ArrowUp:[0,-1],ArrowDown:[0,1],ArrowLeft:[-1,0],ArrowRight:[1,0],
              w:[0,-1],s:[0,1],a:[-1,0],d:[1,0]};
   const d=map[e.key];if(d)changeDir(d[0],d[1]);
+  if(e.key==='Enter'||e.key===' '){e.preventDefault();if(!playing)startGame();}
 });
+
+// Swipe detection
+let touchStartX=0,touchStartY=0;
+document.addEventListener('touchstart',e=>{
+  const t=e.touches[0];
+  touchStartX=t.clientX;touchStartY=t.clientY;
+},{passive:true});
+
+document.addEventListener('touchend',e=>{
+  if(!playing)return;
+  const t=e.changedTouches[0];
+  if(!t)return;
+  const dx=t.clientX-touchStartX;
+  const dy=t.clientY-touchStartY;
+  const absDx=Math.abs(dx),absDy=Math.abs(dy);
+  const minSwipe=20;
+  if(absDx<minSwipe&&absDy<minSwipe)return;
+  if(absDx>absDy)changeDir(dx>0?1:-1,0);
+  else changeDir(0,dy>0?1:-1);
+},{passive:true});
 
 function update(){
   dir=nextDir;
   const head={x:snake[0].x+dir.x,y:snake[0].y+dir.y};
   if(head.x<0||head.x>=COLS||head.y<0||head.y>=ROWS||snake.some(s=>s.x===head.x&&s.y===head.y)){
     clearInterval(gameLoop);
-    if(score>best){best=score;localStorage.setItem('snake_best',best);}
+    playing=false;
+    if(score>best){{best=score;localStorage.setItem('snake_best',best);document.getElementById('best').textContent=best;}}
     document.getElementById('final').textContent=score;
-    document.getElementById('best').textContent=best;
+    document.getElementById('finalBest').textContent=best;
     document.getElementById('gameover').classList.remove('hidden');
     return;
   }
@@ -143,23 +176,24 @@ function update(){
 
 function draw(){
   ctx.fillStyle='#0a0a1a';ctx.fillRect(0,0,canvas.width,canvas.height);
-  // Grid lines
   ctx.strokeStyle='rgba(255,255,255,.03)';ctx.lineWidth=.5;
   for(let i=0;i<=COLS;i++){ctx.beginPath();ctx.moveTo(i*SIZE,0);ctx.lineTo(i*SIZE,canvas.height);ctx.stroke()}
   for(let i=0;i<=ROWS;i++){ctx.beginPath();ctx.moveTo(0,i*SIZE);ctx.lineTo(canvas.width,i*SIZE);ctx.stroke()}
-  // Snake
   snake.forEach((s,i)=>{
     const alpha=i===0?1:.5+(.5*i/snake.length);
     ctx.fillStyle=i===0?`rgba(46,204,113,${alpha})`:`rgba(39,174,96,${alpha})`;
     ctx.fillRect(s.x*SIZE+1,s.y*SIZE+1,SIZE-2,SIZE-2);
   });
-  // Food
   const pulse=Math.sin(Date.now()/300)*.3+.7;
   ctx.fillStyle=`rgba(231,76,60,${pulse})`;
   ctx.beginPath();ctx.arc(food.x*SIZE+SIZE/2,food.y*SIZE+SIZE/2,SIZE/2-2,0,Math.PI*2);ctx.fill();
 }
 
-startGame();
+// Start button
+document.getElementById('startBtn').addEventListener('click',startGame);
+document.getElementById('startBtn').addEventListener('touchend',e=>{e.preventDefault();startGame();});
+
+// Show initial state (blank canvas + start screen)
 </script>
 </body>
 </html>
