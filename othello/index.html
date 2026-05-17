@@ -98,7 +98,7 @@ function connect(url){
   toast('Connecting to '+url+'...');
   ws=new WebSocket(url);
   ws.onopen=()=>{
-    toast('Connected!');
+    toast('Connected! Now join or create a room.');
     if(myPlayer) joinGame();
   };
   ws.onmessage=e=>{
@@ -188,12 +188,20 @@ function buildBoard(){
   }
 }
 
+function sendCmd(cmd,retries=10){
+  if(ws && ws.readyState===WebSocket.OPEN){
+    ws.send(JSON.stringify(cmd));
+    return;
+  }
+  if(retries<=0){toast('Connection not ready, try again');return;}
+  setTimeout(()=>sendCmd(cmd,retries-1),500);
+}
+
 function createRoom(){
   myName=document.getElementById('nameInput').value||'Player';
-  connect(wsUrl);
-  setTimeout(()=>ws.send(JSON.stringify({cmd:'create',name:myName})),500);
   document.getElementById('joinBtn').disabled=true;
   document.getElementById('lobby').querySelector('.btn.primary').disabled=true;
+  sendCmd({cmd:'create',name:myName});
 }
 
 function showJoin(){
@@ -206,9 +214,8 @@ function showJoin(){
 function joinGame(){
   myName=document.getElementById('nameInput').value||'Player';
   const room=document.getElementById('roomInput').value.trim();
-  if(!room){alert('Enter room code');return;}
-  connect(wsUrl);
-  setTimeout(()=>ws.send(JSON.stringify({cmd:'join',room,name:myName})),500);
+  if(!room){toast('Enter room code');return;}
+  sendCmd({cmd:'join',room,name:myName});
 }
 
 function showOverlay(title,msg){
