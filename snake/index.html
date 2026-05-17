@@ -18,7 +18,7 @@ body{
 .header a:hover{background:rgba(243,156,18,.15)}
 .score{font-size:1.5rem;color:#f39c12;min-width:80px;text-align:right}
 .best{font-size:.85rem;color:#666}
-canvas{border:2px solid rgba(255,255,255,.1);border-radius:8px;display:block}
+canvas{border:2px solid rgba(255,255,255,.1);border-radius:8px;display:block;max-width:100%;height:auto}
 .controls{display:flex;gap:1rem;margin-top:1rem}
 .ctrl-btn{
   width:55px;height:55px;border-radius:12px;border:1px solid rgba(255,255,255,.2);
@@ -27,6 +27,7 @@ canvas{border:2px solid rgba(255,255,255,.1);border-radius:8px;display:block}
   transition:background .15s
 }
 .ctrl-btn:active{background:rgba(255,255,255,.2)}
+@media(max-width:450px){body{padding:.5rem}.header{gap:1rem;margin-bottom:.5rem}.score{font-size:1.2rem;min-width:auto}}
 .d-pad{
   display:grid;grid-template-columns:50px 50px 50px;grid-template-rows:50px 50px 50px;
   gap:4px;margin-top:1rem
