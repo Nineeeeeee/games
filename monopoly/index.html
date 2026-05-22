@@ -27,6 +27,8 @@ body{
 .btn:disabled{opacity:.4;cursor:not-allowed;transform:none}
 .btn.primary{background:#f39c12;color:#0a0a1a}
 .btn.ghost{background:rgba(255,255,255,.1);color:#fff}
+.btn.cpu{background:rgba(155,89,182,.3);color:#d7bde2;border:1px solid rgba(155,89,182,.4)}
+.btn.remove{background:rgba(231,76,60,.2);color:#e74c3c;border:1px solid rgba(231,76,60,.3)}
 .btn.sm{padding:.4rem 1rem;font-size:.85rem}
 .panel{display:none;flex-direction:column;align-items:center;width:100%;max-width:500px}
 .panel.active{display:flex}
@@ -40,16 +42,23 @@ body{
 .player-row .dot{width:12px;height:12px;border-radius:50%;display:inline-block;margin-right:.5rem}
 .player-row .name{font-size:.95rem}
 .player-row .tag{font-size:.75rem;padding:.15rem .5rem;border-radius:4px;background:#f39c12;color:#0a0a1a}
+.player-row .tag.cpu{background:#9b59b6;color:#fff}
 .player-row.waiting .tag{background:rgba(255,255,255,.1);color:#888}
 /* Game */
 .game-panel{display:none;flex-direction:column;align-items:center;width:100%;max-width:500px}
 .game-panel.active{display:flex}
 canvas{border-radius:8px;display:block;max-width:100%;height:auto}
-.info-bar{width:100%;margin-top:.5rem;display:flex;gap:.5rem;flex-wrap:wrap;justify-content:center}
-.info-item{background:rgba(255,255,255,.05);border-radius:8px;padding:.4rem .8rem;font-size:.8rem;min-width:80px;text-align:center}
+.info-bar{width:100%;margin-top:.5rem;display:flex;gap:.4rem;flex-wrap:wrap;justify-content:center}
+.info-item{background:rgba(255,255,255,.05);border-radius:8px;padding:.4rem .7rem;font-size:.8rem;min-width:75px;text-align:center;position:relative}
 .info-item .val{font-size:1rem;font-weight:600;margin-top:.2rem}
 .info-item .val.positive{color:#2ecc71}
 .info-item .val.negative{color:#e74c3c}
+.info-item .cpu-badge{position:absolute;top:2px;right:4px;font-size:.55rem;color:#9b59b6;font-weight:600}
+.info-item.bankrupt{opacity:.4}
+.info-item.bankrupt .name{text-decoration:line-through}
+.info-item.current{border:2px solid var(--pc)}
+.info-item .name-row{display:flex;align-items:center;gap:4px}
+.info-item .prop-count{font-size:.65rem;color:#666;margin-top:2px}
 .msg-box{background:rgba(255,255,255,.08);border-radius:8px;padding:.6rem 1rem;margin:.5rem 0;font-size:.85rem;text-align:center;width:100%;min-height:2.5rem;display:flex;align-items:center;justify-content:center;color:#ddd}
 .action-bar{display:flex;gap:.5rem;margin-top:.3rem;flex-wrap:wrap;justify-content:center}
 .dice-display{font-size:2.5rem;margin:.3rem 0;min-height:3rem}
@@ -61,8 +70,8 @@ canvas{border-radius:8px;display:block;max-width:100%;height:auto}
 .overlay.hidden{display:none}
 @media(max-width:500px){
   .room-code{font-size:2.5rem}
-  canvas{max-width:calc(100vw - 2rem)}
-  .info-item{font-size:.7rem;min-width:60px;padding:.3rem .6rem}
+  canvas{max-width:calc(100vw - 1.5rem)}
+  .info-item{font-size:.7rem;min-width:60px;padding:.3rem .5rem}
 }
 </style>
 </head>
@@ -71,7 +80,7 @@ canvas{border-radius:8px;display:block;max-width:100%;height:auto}
 <!-- Lobby -->
 <div class="home" id="lobby">
   <h1>🎲 大富翁</h1>
-  <p style="color:#888;margin-bottom:1rem">Multiplayer Monopoly</p>
+  <p style="color:#888;margin-bottom:1rem">Multiplayer · AI Bot Support</p>
   <input id="nameInput" placeholder="名字" maxlength="12">
   <br>
   <input id="roomInput" placeholder="房间号" maxlength="4" style="display:none">
@@ -79,6 +88,8 @@ canvas{border-radius:8px;display:block;max-width:100%;height:auto}
   <button class="btn primary" onclick="createRoom()">Create Room</button>
   <button class="btn ghost" onclick="showJoin()" id="joinBtn">Join Room</button>
   <br><br>
+  <p style="color:#555;font-size:.8rem">💡 Solo? Create a room, add CPU players, then start!</p>
+  <br>
   <a class="back-link" href="../">← Back to Arcade</a>
 </div>
 
@@ -88,6 +99,10 @@ canvas{border-radius:8px;display:block;max-width:100%;height:auto}
   <div class="room-code" id="roomCode">----</div>
   <div class="room-card">
     <div class="player-list" id="playerList"></div>
+    <div id="lobbyActions" style="display:flex;gap:.4rem;flex-wrap:wrap;justify-content:center;margin-top:.5rem">
+      <button class="btn cpu sm" id="cpuBtn" onclick="addCPU()" style="display:none">+ Add CPU</button>
+      <button class="btn remove sm" id="removeCpuBtn" onclick="removeCPU()" style="display:none">− CPU</button>
+    </div>
     <button class="btn primary" id="startBtn" onclick="startGame()" style="display:none;width:100%;margin-top:.5rem">Start Game</button>
     <p id="waitMsg" style="color:#888;font-size:.9rem;margin-top:1rem">Waiting for players...</p>
   </div>
@@ -148,12 +163,12 @@ const CELLS = [
 ];
 
 const COLORS = ['#e74c3c','#3498db','#2ecc71','#f1c40f','#9b59b6','#e67e22'];
-const GRID=9;
 const PARAMS=new URLSearchParams(location.search);
 const SVR=PARAMS.get('server');
-const WS_URL=SVR?`wss://${SVR}`:(location.protocol==='https:'?'wss':'ws')+'://'+location.host;
+const WS_URL=SVR?`wss://${SVR}`:'ws://localhost:8766';
 
 let ws,myIdx,myRoom,myName,gameState=null,cellSize=0;
+let isHost=false;
 
 function pos(i){
   if(i<=8) return {r:8,c:i};
@@ -172,7 +187,7 @@ function toast(m,c){
 function showPanel(id){
   document.querySelectorAll('.home,.panel,.game-panel').forEach(e=>{e.style.display='none';e.classList.remove('active')});
   const el=document.getElementById(id);
-  el.style.display='flex';el.classList.add('active');
+  if(el){el.style.display='flex';el.classList.add('active')}
 }
 
 function sendCmd(cmd,retries=10){
@@ -188,20 +203,20 @@ function connect(){
     const d=JSON.parse(e.data);
     switch(d.type){
       case 'created':
-        myRoom=d.room;myIdx=d.player_idx;
+        myRoom=d.room;myIdx=d.player_idx;isHost=true;
         document.getElementById('roomCode').textContent=d.room;
         showPanel('roomPanel');
         updatePlayerList(d.players,d.max_players);
-        document.getElementById('startBtn').style.display='block';
-        document.getElementById('waitMsg').textContent='Waiting for players...';
+        document.getElementById('cpuBtn').style.display='block';
+        document.getElementById('removeCpuBtn').style.display='block';
         break;
       case 'joined':
-        myRoom=d.room;myIdx=d.player_idx;
+        myRoom=d.room;myIdx=d.player_idx;isHost=false;
         document.getElementById('roomCode').textContent=d.room;
         showPanel('roomPanel');
         updatePlayerList(d.players,d.max_players);
-        document.getElementById('startBtn').style.display='none';
-        document.getElementById('waitMsg').textContent='Waiting for host to start...';
+        document.getElementById('cpuBtn').style.display='none';
+        document.getElementById('removeCpuBtn').style.display='none';
         break;
       case 'room_update':
         updatePlayerList(d.players,d.max_players||4);
@@ -260,19 +275,31 @@ function joinGame(){
   if(!room){toast('输入房间号');return;}
   sendCmd({cmd:'join',room,name:myName});
 }
-function startGame(){sendCmd({cmd:'start'});}
-function leaveRoom(){ws.close();showPanel('lobby');};
+function addCPU(){
+  sendCmd({cmd:'add_cpu'});
+}
+function removeCPU(){
+  sendCmd({cmd:'remove_cpu'});
+}
+function startGame(){
+  sendCmd({cmd:'start'});
+}
+function leaveRoom(){
+  ws.close();
+  showPanel('lobby');
+  isHost=false;
+}
 
 function updatePlayerList(players,maxP){
   const list=document.getElementById('playerList');
   list.innerHTML='';
-  const labels=['房主','','','','',''];
   players.forEach((p,i)=>{
     const row=document.createElement('div');
     row.className='player-row';
-    if(i===0)row.style.border='1px solid '+p.color;
+    if(i===0&&!p.is_cpu)row.style.border='1px solid '+p.color;
+    const isCpu=p.is_cpu?'<span class="tag cpu">CPU</span>':'<span class="tag">Host '+(i+1)+'</span>';
     row.innerHTML='<span><span class="dot" style="background:'+p.color+'"></span><span class="name">'+
-      p.name+'</span></span><span class="tag">'+(i===0?'Host':'Player '+(i+1))+'</span>';
+      p.name+(p.is_cpu?' <span style="color:#9b59b6;font-size:.75rem">(AI)</span>':'')+'</span></span><span>'+isCpu+'</span>';
     list.appendChild(row);
   });
   for(let i=players.length;i<maxP;i++){
@@ -281,15 +308,31 @@ function updatePlayerList(players,maxP){
     row.innerHTML='<span><span class="dot" style="background:#333"></span><span class="name" style="color:#555">等待加入...</span></span>';
     list.appendChild(row);
   }
+  // Show/hide start button
+  if(players.length>=2){
+    document.getElementById('startBtn').style.display=isHost?'block':'none';
+    document.getElementById('waitMsg').style.display=isHost?'none':'block';
+    document.getElementById('waitMsg').textContent='Waiting for host to start...';
+  }else{
+    document.getElementById('startBtn').style.display='none';
+    document.getElementById('waitMsg').textContent='至少需要2名玩家（可添加CPU）';
+    document.getElementById('waitMsg').style.display='block';
+  }
+  // Show CPU buttons only for host, in lobby
+  if(isHost){
+    document.getElementById('cpuBtn').style.display=players.length<maxP?'inline-block':'none';
+    const hasCpu=players.some(p=>p.is_cpu);
+    document.getElementById('removeCpuBtn').style.display=hasCpu?'inline-block':'none';
+  }
 }
 
 // ===== Canvas =====
 function initCanvas(){
   const canvas=document.getElementById('boardCanvas');
   const maxW=Math.min(window.innerWidth-32,480);
-  cellSize=Math.floor(maxW/GRID);
-  canvas.width=cellSize*GRID;
-  canvas.height=cellSize*GRID;
+  cellSize=Math.floor(maxW/9);
+  canvas.width=cellSize*9;
+  canvas.height=cellSize*9;
   canvas.style.width=canvas.width+'px';
   canvas.style.height=canvas.height+'px';
   renderBoard();
@@ -322,14 +365,17 @@ function renderBoard(){
   ctx.fillStyle='#0a0a1a';
   ctx.fillRect(s,s,canvas.width-2*s,canvas.height-2*s);
   
-  // Inner text
-  ctx.fillStyle='rgba(255,255,255,.1)';
-  ctx.font=Math.floor(s*1.2)+'px sans-serif';
-  ctx.textAlign='center';ctx.textBaseline='middle';
-  ctx.fillText('🎲',canvas.width/2,canvas.height/2-10);
+  // Inner info: alive player count, top spender
+  const alive=gameState&&gameState.players?gameState.players.filter(p=>p.alive).length:0;
+  ctx.fillStyle='rgba(255,255,255,.08)';
   ctx.font=Math.floor(s*0.35)+'px sans-serif';
-  ctx.fillStyle='rgba(255,255,255,.3)';
-  ctx.fillText('MONOPOLY',canvas.width/2,canvas.height/2+s*0.5);
+  ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillText('🎲 大富翁',canvas.width/2,canvas.height/2-10);
+  if(alive>0){
+    ctx.font=Math.floor(s*0.25)+'px sans-serif';
+    ctx.fillStyle='rgba(255,255,255,.3)';
+    ctx.fillText(alive+'人进行中',canvas.width/2,canvas.height/2+s*0.45);
+  }
   
   // Draw cells
   for(let i=0;i<32;i++){
@@ -337,7 +383,6 @@ function renderBoard(){
     const cell=CELLS[i];
     const x=p.c*s, y=p.r*s;
     const w=s, h=s;
-    const isInner=r=>r>0&&r<8&&c>0&&c<8;
     
     // Background
     ctx.fillStyle=cellColor(cell.type);
@@ -398,6 +443,13 @@ function renderBoard(){
       ctx.strokeStyle='#fff';
       ctx.lineWidth=1.5;
       ctx.stroke();
+      // CPU badge dot
+      if(p.is_cpu){
+        ctx.beginPath();
+        ctx.arc(cx-s*0.08,cy-s*0.08,s*0.05,0,Math.PI*2);
+        ctx.fillStyle='#9b59b6';
+        ctx.fill();
+      }
       ctx.fillStyle='#fff';
       ctx.font=Math.floor(s*0.15)+'px sans-serif';
       ctx.textAlign='center';ctx.textBaseline='middle';
@@ -412,12 +464,14 @@ function renderInfo(){
   bar.innerHTML='';
   gameState.players.forEach((p,i)=>{
     const el=document.createElement('div');
-    el.className='info-item';
-    el.style.border=i===gameState.current?'2px solid '+p.color:'';
+    el.className='info-item'+(p.alive?'':' bankrupt')+(i===gameState.current?' current':'');
+    el.style.setProperty('--pc',p.color);
     const current=i===myIdx?' (你)':'';
-    el.innerHTML=`<div style="color:${p.color}">${p.name}${current}</div>
+    const cpuTag=p.is_cpu?'<span class="cpu-badge">AI</span>':'';
+    el.innerHTML=`${cpuTag}
+      <div class="name-row"><span style="color:${p.color}">${p.name}${current}</span></div>
       <div class="val ${p.money>=0?'positive':'negative'}">$${p.money}</div>
-      <div style="font-size:.7rem;color:#666">${p.props.length}处地产</div>`;
+      <div class="prop-count">${p.props.length}处地产</div>`;
     bar.appendChild(el);
   });
 }
@@ -434,7 +488,12 @@ function updateActions(state){
   const bar=document.getElementById('actionBar');
   bar.innerHTML='';
   if(state.phase==='ended')return;
-  if(myIdx!==state.current){bar.innerHTML='<span style="color:#666;font-size:.9rem">等待其他玩家...</span>';return;}
+  if(myIdx!==state.current){
+    const cur=state.players[state.current];
+    const label=cur&&cur.is_cpu?' (AI思考中...)':'';
+    bar.innerHTML='<span style="color:#666;font-size:.9rem">等待 '+(cur?cur.name:'其他玩家')+label+'</span>';
+    return;
+  }
   if(state.phase==='rolling')bar.innerHTML='<button class="btn primary" onclick="sendCmd({cmd:\'roll\'})">🎲 掷骰子</button>';
   if(state.phase==='done')bar.innerHTML='<button class="btn primary" onclick="sendCmd({cmd:\'end_turn\'})">✅ 结束回合</button>';
 }
