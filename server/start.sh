@@ -1,56 +1,76 @@
 #!/bin/bash
-# Othello server + localhost.run public tunnel
+# Start all game servers + serveo tunnels, print share links
 cd "$(dirname "$0")"
 
+PYTHON=/usr/local/lib/hermes-agent/venv/bin/python3
+PIDS=()
+
 cleanup() {
-    echo "Stopping..."
-    if [ -f /tmp/othello_pids.txt ]; then
-        read SSH_PID SERVER_PID < /tmp/othello_pids.txt
-        kill $SSH_PID $SERVER_PID 2>/dev/null
-        rm -f /tmp/othello_pids.txt /tmp/othello_tunnel.log
-    fi
+    echo ""
+    echo "Stopping all..."
+    for pid in "${PIDS[@]}"; do kill $pid 2>/dev/null; done
+    rm -f /tmp/game_*.log /tmp/game_tunnel.log
     exit 0
 }
 trap cleanup INT TERM
 
-echo "Starting server..."
-python3 server.py &
-SERVER_PID=$!
-sleep 1
+# ---- Start a server ----
+start_srv() {
+    local name=$1 port=$2 script=$3
+    echo "Starting $name server on :$port..."
+    $PYTHON "$script" $port &
+    PIDS+=($!)
+    sleep 0.5
+}
 
-echo "Creating public tunnel via localhost.run..."
-ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=30 \
-    -R 80:localhost:8765 localhost.run > /tmp/othello_tunnel.log 2>&1 &
-SSH_PID=$!
-echo $SSH_PID $SERVER_PID > /tmp/othello_pids.txt
+# ---- Create serveo tunnel ----
+tunnel() {
+    local name=$1 port=$2
+    echo "Tunneling $name..."
+    ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=30 \
+        -R 80:localhost:$port serveo.net > /tmp/game_${name}.log 2>&1 &
+    PIDS+=($!)
+    local url=""
+    for i in $(seq 1 20); do
+        sleep 1
+        url=$(grep -oP '[a-zA-Z0-9.-]+\.serveo(usercontent)?\.(com|net)' /tmp/game_${name}.log 2>/dev/null | head -1)
+        if [ -n "$url" ]; then
+            echo "  $name → serveo: $url"
+            return 0
+        fi
+    done
+    echo "  $name → tunnel failed, check /tmp/game_${name}.log"
+    return 1
+}
 
-# Extract URL from tunnel log
-URL=""
-for i in $(seq 1 30); do
-    sleep 2
-    URL=$(grep -oP 'https?://[a-zA-Z0-9.-]+\.lhr\.life' /tmp/othello_tunnel.log 2>/dev/null | head -1)
-    if [ -n "$URL" ]; then break; fi
-done
+# ---- Start everything ----
+echo "=== Starting Game Servers ==="
+
+start_srv "othello"  8765 "server.py"
+start_srv "monopoly" 8766 "monopoly_server.py"
+start_srv "chat"     8767 "chat_demo.py"
 
 echo ""
-echo "╔═══════════════════════════════════════════════════╗"
-echo "║        🎮  Othello Server Ready!                  ║"
-if [ -n "$URL" ]; then
-    echo "║                                                   ║"
-    echo "║  📡 Server:  $URL  ║"
-    echo "║                                                   ║"
-    echo "║  🔗 Play:                                       ║"
-    echo "║     https://nineeeeeee.github.io/games/othello/  ║"
-    echo "║                                                   ║"
-    echo "║  🤝 Share (friend add as param):                 ║"
-    echo "║     ?server=${URL#https://}  ║"
-else
-    echo "║  ⚠️  Tunnel not yet ready, check log:              ║"
-    echo "║  /tmp/othello_tunnel.log                         ║"
-fi
-echo "║                                                   ║"
-echo "║  Ctrl+C to stop                                   ║"
-echo "╚═══════════════════════════════════════════════════╝"
+echo "=== Creating Tunnels ==="
+tunnel "othello" 8765
+tunnel "monopoly" 8766
+tunnel "chat" 8767
+
+# Build links
+O=$(grep -oP '[a-zA-Z0-9.-]+\.serveo(usercontent)?\.(com|net)' /tmp/game_othello.log 2>/dev/null | head -1)
+M=$(grep -oP '[a-zA-Z0-9.-]+\.serveo(usercontent)?\.(com|net)' /tmp/game_monopoly.log 2>/dev/null | head -1)
+C=$(grep -oP '[a-zA-Z0-9.-]+\.serveo(usercontent)?\.(com|net)' /tmp/game_chat.log 2>/dev/null | head -1)
+
+echo ""
+echo "=============================================="
+echo "  All Games Ready!"
+echo ""
+[ -n "$O" ] && echo "  Othello:  https://nineeeeeee.github.io/games/othello/?server=$O"
+[ -n "$M" ] && echo "  Monopoly: https://nineeeeeee.github.io/games/monopoly/?server=$M"
+[ -n "$C" ] && echo "  Chat:     https://nineeeeeee.github.io/games/chat/?server=$C"
+echo ""
+echo "  Ctrl+C to stop all"
+echo "=============================================="
 echo ""
 
-wait $SSH_PID
+wait
